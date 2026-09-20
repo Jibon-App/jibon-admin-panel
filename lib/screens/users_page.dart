@@ -213,7 +213,67 @@ class _UsersPageState extends State<UsersPage> {
     }
   }
 
-  // ... (বাকি কোড আগের মতোই থাকবে)
+  // ================= 🌟 ইউজার ব্লক/আনব্লক করার লজিক 🌟 =================
+  Future<void> _toggleUserStatus(String documentId, String currentStatus, String userName) async {
+    // বর্তমান স্ট্যাটাস 'active' থাকলে 'blocked' করবে, আর 'blocked' থাকলে 'active' করবে
+    final String newStatus = currentStatus.toLowerCase() == 'active' ? 'blocked' : 'active';
+    final String actionText = newStatus == 'blocked' ? 'Block' : 'Unblock';
+
+    // ১. অ্যাডমিনকে কনফার্মেশন ডায়ালগ দেখানো
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('$actionText User?', style: const TextStyle(fontWeight: FontWeight.bold)),
+        content: Text('Are you sure you want to $actionText $userName?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false), // No বাটনে ক্লিক করলে
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true), // Yes বাটনে ক্লিক করলে
+            style: ElevatedButton.styleFrom(backgroundColor: newStatus == 'blocked' ? Colors.red : Colors.green),
+            child: Text('Yes, $actionText', style: const TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    // ২. যদি অ্যাডমিন 'Yes' এ ক্লিক করে, তবে ফায়ারবেস আপডেট হবে
+    if (confirm == true) {
+      try {
+        await FirebaseFirestore.instance.collection('users').doc(documentId).update({
+          'status': newStatus, // ফায়ারবেসে স্ট্যাটাস আপডেট
+        });
+
+        // ৩. UI সাথে সাথে আপডেট করার জন্য ডায়নামিক লিস্ট আপডেট
+        final index = _usersData.indexWhere((doc) => doc.id == documentId);
+        if (index != -1) {
+          final updatedDoc = await FirebaseFirestore.instance.collection('users').doc(documentId).get();
+          setState(() {
+            _usersData[index] = updatedDoc;
+          });
+        }
+
+        // ৪. সাকসেস মেসেজ দেখানো
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('$userName has been successfully ${newStatus}ed!'),
+              backgroundColor: newStatus == 'blocked' ? Colors.red : Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to update status: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -583,9 +643,15 @@ class _UsersPageState extends State<UsersPage> {
               onSelected: (String action) {
                 if (action == 'edit_blood') {
                   _showEditBloodGroupDialog(id, bloodGroup);
-                } else {
+                }
+                // 🌟 ব্লক/আনব্লক এর লজিক এখানে যোগ করা হলো 🌟
+                else if (action == 'block') {
+                  // এখানে dbStatus এর জায়গায় আপনার কোডে থাকা স্ট্যাটাস ভেরিয়েবলটির নাম দেবেন (যেমন: status)
+                  _toggleUserStatus(id, dbStatus, name);
+                }
+                else {
                   debugPrint('Clicked $action on User: $name');
-                  // অন্যান্য অ্যাকশনগুলো এখানে যোগ করবেন
+                  // 'view' বা 'delete' এর কাজ পরে এখানে যোগ করবেন
                 }
               },
             )

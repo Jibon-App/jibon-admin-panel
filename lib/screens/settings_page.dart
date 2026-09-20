@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -10,12 +11,88 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   // সুইচের স্টেটগুলো
   bool maintenanceMode = false;
-  bool allowZeroCredit = true;
+  bool allowZeroCredit = false; // 🌟 ডিফল্টভাবে false রাখা হলো
   bool autoApproveDonation = false;
   bool adminNotifications = true;
 
+  bool isLoading = true; // 🌟 ডেটা ফেচিংয়ের জন্য লোডিং স্টেট
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchSettings(); // 🌟 পেজ লোড হওয়ার সময় ফায়ারবেস থেকে ডেটা আনবে
+  }
+
+  // ================= 🌟 ফায়ারবেস থেকে ডেটা আনা 🌟 =================
+  Future<void> _fetchSettings() async {
+    try {
+      DocumentSnapshot doc = await FirebaseFirestore.instance
+          .collection('app_settings')
+          .doc('configs')
+          .get();
+
+      if (doc.exists) {
+        final data = doc.data() as Map<String, dynamic>?;
+        if (data != null && mounted) {
+          setState(() {
+            allowZeroCredit = data['isZeroCreditOfferActive'] ?? false;
+            // 💡 আপনি চাইলে maintenanceMode বা অন্য ফিল্ডগুলোও ফায়ারবেস থেকে আনতে পারেন
+            isLoading = false;
+          });
+        }
+      } else {
+        if (mounted) setState(() => isLoading = false);
+      }
+    } catch (e) {
+      debugPrint("Error fetching settings: $e");
+      if (mounted) setState(() => isLoading = false);
+    }
+  }
+
+  // ================= 🌟 ফায়ারবেসে ডেটা আপডেট করা 🌟 =================
+  Future<void> _updateZeroCreditStatus(bool newValue) async {
+    // ১. সাথে সাথে UI আপডেট করা
+    setState(() {
+      allowZeroCredit = newValue;
+    });
+
+    try {
+      // ২. ফায়ারবেসে আপডেট করা
+      await FirebaseFirestore.instance
+          .collection('app_settings')
+          .doc('configs')
+          .set({
+        'isZeroCreditOfferActive': newValue,
+      }, SetOptions(merge: true)); // merge: true দিলে অন্য ফিল্ডগুলো মুছে যাবে না
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(newValue ? 'Zero-Credit Offer is now ACTIVE.' : 'Zero-Credit Offer is now DISABLED.'),
+            backgroundColor: newValue ? Colors.green : Colors.red,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      // ৩. ফায়ারবেসে আপডেট ফেইল হলে আগের অবস্থায় ফিরে যাওয়া
+      setState(() {
+        allowZeroCredit = !newValue;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to update setting.'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Center(child: CircularProgressIndicator(color: Color(0xFFE63946)));
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
       child: Column(
@@ -159,7 +236,12 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           _buildSwitchRow('Maintenance Mode', 'Show "App is under maintenance" to all users.', maintenanceMode, (val) => setState(() => maintenanceMode = val)),
           const Divider(height: 32, color: Color(0xFFEEEEEE)),
-          _buildSwitchRow('Zero-Credit Loans', 'Allow emergency requests for users with 0 credits.', allowZeroCredit, (val) => setState(() => allowZeroCredit = val)),
+          _buildSwitchRow(
+              'Zero-Credit Loans',
+              'Allow emergency requests for users with 0 credits.',
+              allowZeroCredit,
+                  (val) => _updateZeroCreditStatus(val) // 🌟 ফায়ারবেস আপডেট ফাংশন কল করা হলো
+          ),
           const Divider(height: 32, color: Color(0xFFEEEEEE)),
           _buildSwitchRow('Auto-Approve Donations', 'Automatically verify donations submitted by hospitals.', autoApproveDonation, (val) => setState(() => autoApproveDonation = val)),
           const Divider(height: 32, color: Color(0xFFEEEEEE)),

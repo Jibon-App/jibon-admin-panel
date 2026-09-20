@@ -32,9 +32,9 @@ class _DashboardPageState extends State<DashboardPage> {
       // Total Users (ছোট ব্যাজে দেখানোর জন্য)
       final totalUsersSnap = await firestore.collection('users').count().get();
 
-      // ২. Active Requests এবং Ongoing Donations (আগের মতোই থাকবে)
+      // ২. Active Requests এবং Ongoing Donations (Active এবং Donors Found দুটোই কাউন্ট হবে)
       final activeRequestsSnap = await firestore.collection('requests')
-          .where('status', isEqualTo: 'Active')
+          .where('status', whereIn: ['Active', 'Donors Found'])
           .get();
 
       int activeRequestsCount = activeRequestsSnap.docs.length;
