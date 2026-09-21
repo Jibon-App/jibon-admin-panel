@@ -9,6 +9,8 @@ import 'screens/notifications_page.dart';
 import 'screens/settings_page.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'screens/admin_login_page.dart';
 
 void main() async {
   // ১. ফ্লাটার বাইন্ডিং নিশ্চিত করা
@@ -35,7 +37,37 @@ class JibonAdminApp extends StatelessWidget {
         textTheme: GoogleFonts.poppinsTextTheme(Theme.of(context).textTheme),
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFE63946)),
       ),
-      home: const MainLayout(),
+      home: const AuthWrapper(),
+    );
+  }
+}
+
+// ================= 🌟 লগ-ইন চেকার (Auth Wrapper) 🌟 =================
+class AuthWrapper extends StatelessWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        // ফায়ারবেস চেক করার সময় একটি লোডিং দেখাবে
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(color: Color(0xFFE63946)),
+            ),
+          );
+        }
+
+        // যদি ইউজার লগ-ইন করা থাকে, তবে MainLayout (ড্যাশবোর্ড) দেখাবে
+        if (snapshot.hasData) {
+          return const MainLayout();
+        }
+
+        // লগ-ইন করা না থাকলে AdminLoginPage দেখাবে
+        return const AdminLoginPage();
+      },
     );
   }
 }
@@ -68,14 +100,8 @@ class _MainLayoutState extends State<MainLayout> {
                     padding: const EdgeInsets.symmetric(horizontal: 24.0),
                     child: Row(
                       children: [
-                        Stack(
-                          alignment: Alignment.center,
-                          children: const [
-                            Icon(Icons.water_drop, color: Color(0xFFE63946), size: 36),
-                            Positioned(top: 14, child: Icon(Icons.favorite, color: Colors.white, size: 12)),
-                          ],
-                        ),
-                        const SizedBox(width: 12),
+                        Image.asset('assets/logo.png', height: 60, width: 60), // 🌟 আপনার লোগো
+                        const SizedBox(width: 5),
                         Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -146,13 +172,35 @@ class _MainLayoutState extends State<MainLayout> {
                         ],
                       ),
                       const SizedBox(width: 24),
-                      Row(
-                        children: const [
-                          Icon(Icons.account_circle_outlined, size: 32, color: Colors.black54),
-                          SizedBox(width: 8),
-                          Text('Admin', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
-                          SizedBox(width: 4),
-                          Icon(Icons.keyboard_arrow_down, color: Colors.black54),
+                      // 🌟 লগ-আউট ফাংশনালিটি যুক্ত করা হলো
+                      PopupMenuButton<String>(
+                        offset: const Offset(0, 45),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        child: Row(
+                          children: const [
+                            Icon(Icons.account_circle_outlined, size: 32, color: Colors.black54),
+                            SizedBox(width: 8),
+                            Text('Admin', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
+                            SizedBox(width: 4),
+                            Icon(Icons.keyboard_arrow_down, color: Colors.black54),
+                          ],
+                        ),
+                        onSelected: (value) async {
+                          if (value == 'logout') {
+                            await FirebaseAuth.instance.signOut();
+                          }
+                        },
+                        itemBuilder: (BuildContext context) => [
+                          PopupMenuItem<String>(
+                            value: 'logout',
+                            child: Row(
+                              children: const [
+                                Icon(Icons.logout, color: Colors.red, size: 20),
+                                SizedBox(width: 8),
+                                Text('Logout', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                     ],
